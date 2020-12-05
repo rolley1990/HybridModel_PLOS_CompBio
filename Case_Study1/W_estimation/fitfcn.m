@@ -1,3 +1,5 @@
+%% evaluate the objective function
+
 function [J1,J2]=fitfcn(w,error_idx,alpha1,alpha2,D,tr_idx,vl_idx,Exp,x0)
 
 TNF_dose=[.5 1 2];
