@@ -1,3 +1,5 @@
+%% this file is to estimate the correction terms (W)
+
 clc
 clear
 
