@@ -1,1 +1,1 @@
-# HybridModel_PLOS_CompBio
+This repository contains the MATLAB scripts in manuscript "Development of a hybrid model for a partially known intracellular signaling pathway through correction term estimation and neural network modeling" by Dongheon Lee (dongheon.lee@duke.edu), Arul Jayaraman, and Joseph S. Kwon (kwonx075@tamu.edu).
