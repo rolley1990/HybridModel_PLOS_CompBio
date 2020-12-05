@@ -1,6 +1,7 @@
 clc
 clear
 
+%% error in the measurements (log-normal distribution)
 m3=0;
 v3=0.01;
 
@@ -22,7 +23,7 @@ add=makedist('normal','mu',m4,'sigma',v4);
 add_noise=random(add,length(t),3);
 
 
-%% finiding appropriate initial condition
+%% finiding appropriate initial conditions of the states, which are steady states
 
 x0=zeros(4,1);
 options = odeset('AbsTol',1e-6,'RelTol',1e-6);
@@ -44,7 +45,7 @@ end
 
 x0=y_1(end,:);
 
-%%
+%% simulate the "correct system" under three input conditions to obtain experimental observations
 TNF_dose=[.5 1 2];
 for i=1:length(TNF_dose)
 u=TNF_dose(i);
@@ -62,7 +63,7 @@ end
 
 
 
-%%
+%% compare with the predictions from the inaccurate model
 clr={'b','r','k'};
 
 TNF_dose=[.5 1 2];
