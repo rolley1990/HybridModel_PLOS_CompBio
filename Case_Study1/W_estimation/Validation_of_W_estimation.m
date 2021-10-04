@@ -23,8 +23,7 @@ for i=1:length(TNF_dose)
     y=deval(R1,t_sam);
     
     Y(i,:)=y(3,:);
-% % %     figure(i)
-% % %      plot(t_sam,y(3,:),'o-',t_sam,Y_Exp(i,:),'--s')
+
    for j=1:length(t_sam)
         dy(:,j)=case_det(t_sam,y(:,j),u);
    end
