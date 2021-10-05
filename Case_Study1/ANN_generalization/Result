@@ -1,0 +1,287 @@
+%% Generate remaining figures of the case study 1
+clc
+clear
+close all
+load('NFkB.mat')
+Y_Exp=Y;
+clear Y
+TNF_dose=[.5 1 2];
+dose=3;
+error_idx=4;
+t_sam=0:1:14;
+tt=0:0.1:14;
+w0=zeros(dose*(length(t_sam))*length(error_idx),1);
+
+%% without error terms
+load('Init.mat')
+
+options = odeset('AbsTol',1e-6,'RelTol',1e-6);
+dY=[];
+
+mak1={'bo','ro','ko'};
+mak2={'b-','r-','k-'};
+
+for i=1:length(TNF_dose)
+    u=TNF_dose(i);    
+% % %     R1=ode15s(@(t,x) case_det(t,x,u),t_sam,x0,options);    
+% % %     y=deval(R1,t_sam);  
+    R1=ode15s(@(t,x) case_det(t,x,u),tt,x0,options);    
+    y=deval(R1,tt);   
+    Y(:,:,i)=y;
+% % %    for j=1:length(t_sam)
+% % %         dy(:,j)=case_det(t_sam,y(:,j),u);
+% % %    end
+% % %     plot(t_sam,Y_Exp(i,:),mak1{i},'Markersize',10)
+% % %     hold on
+% % %     plot(tt,y(3,:),mak2{i},'linewidth',1.5)
+% % %     
+    
+     R1=ode15s(@(t,x) case_det(t,x,u),t_sam,x0,options);    
+    y=deval(R1,t_sam);   
+    for j=1:length(t_sam)
+        dy(:,j)=case_det(t_sam,y(:,j),u);
+   end
+   dY=[dY dy];
+end
+% % % % xlabel('Time, hour')
+% % % % ylabel('NF\kappaB Activity')
+% % % % ylim([0.2 1.1])
+% % % % ax = gca; % current axes
+% % % % ax.FontSize = 20;
+% % % % ax.FontWeight='bold';
+% % % % x0=10;
+% % % % y0=-100;
+% % % % width=800;
+% % % % height=600;
+% % % % set(gcf,'units','points','position',[x0,y0,width,height])
+
+
+DYmax=max(abs(dY),[],2);
+for i=1:dose
+    DDx(:,:,i)=repmat(DYmax(error_idx),1,length(t_sam));
+     
+end 
+Alpha=[  1e-3 1e-3;
+        1e-3 1e-2;
+        1e-3  0.1;
+        1e-3  1;
+        1e-3  10]; 
+
+Ntrial=10;
+load('Cross_validation.mat')
+Tr_IDX=IDX{1};
+Val_IDX=IDX{2};
+
+Tr_IDX=repmat(Tr_IDX,Ntrial,1);
+Val_IDX=repmat(Val_IDX,Ntrial,1);
+
+%%
+load('Res.mat')
+XXX=Res{1};
+SSS=Res{2};
+
+tt_idx=1:2:20;
+vv_idx=2:2:20;
+for i=1:size(Alpha,1)
+    s=[];
+   for j=1:Ntrial
+      St=squeeze(SSS(j,:,:,i))'; 
+      St=St(:,1:2);
+      s=[s St];
+   end
+   S(:,1,i)=min(s(:,tt_idx),[],2);
+   S(:,2,i)=min(s(:,vv_idx),[],2);
+end
+clear SS s SS
+for i=1:5
+   SS(i,:)=mean(S(:,:,i));      
+end
+SS=[SS SS(:,1)/size(Tr_IDX,2)+SS(:,2)/size(Val_IDX,2)];
+Alpha_idx=find(SS(:,3)==min(SS(:,3)));
+alpha=Alpha(Alpha_idx,2);
+%%
+SS_op=S(:,:,Alpha_idx);
+for i=1:5
+   St=squeeze(SSS(:,:,i,Alpha_idx)); 
+    St(:,3)=St(:,1)/size(Tr_IDX,2)+St(:,2)/size(Val_IDX,2);
+    idx(i,1)=find(St(:,3)==min(St(:,3)));
+    idx(i,2)=min(St(:,3));
+end
+for i=1:5
+    x_opt(i,:)=XXX(idx(i,1),:,i,Alpha_idx);
+end
+X_opt=x_opt(1,:);
+%[~,Eo]=fitfcn(X_opt,error_idx,1,Alpha(Alpha_idx,2),DDx,[],[],x0,Y_Exp);
+
+%%
+XS=[];
+ W=reshape(X_opt,length(error_idx),length(t_sam),length(TNF_dose));
+ W=W.*DDx;
+ WS=reshape(W,1,length(error_idx)*length(t_sam)*length(TNF_dose));
+% W=squeeze(W)';
+for i=1:3
+  XS=[XS [Y(:,:,i);tt;repmat(TNF_dose(i),1,length(tt))]]; 
+
+end
+
+WS=[];
+for i=1:3
+
+     E=W(:,:,i);
+     pp= interp1(t_sam,E,'linear','pp');
+     e=ppval(pp,tt);
+    WS=[WS e];
+end
+Ncan=1:10;
+Ntr=300;
+Res=zeros(Ntr,4,length(Ncan)+1,length(Ncan));
+AIC_idx=[];
+for i=1:length(t_sam)
+    AIC_idx=[AIC_idx find(tt==t_sam(i))];
+end
+
+AIC_idx=[AIC_idx AIC_idx+length(tt) AIC_idx+2*length(tt)];
+
+%% optimizing the performance of the ANN with the opitmal structure
+load('Res_ANN_opt.mat')
+i=8;
+k=4;
+Ntr=1000;
+temp=zeros(Ntr,7);
+NETT=cell(Ntr,1);
+WO=WS(AIC_idx);
+parfor j=1:Ntr
+   
+    trainFcn = 'trainlm';  % Levenberg-Marquardt backpropagation.
+    net = feedforwardnet( [i,k],trainFcn);
+    net = configure(net,XS,WS);
+    net.layers{1}.transferFcn='tansig';
+    net.trainParam.showWindow = false;
+    
+    net.divideFcn='divideind';
+    net.trainParam.showWindow = false;
+    
+    AICtemp_idx=AIC_idx;
+    AICidx_trn=datasample(AIC_idx,floor(0.7*length(AIC_idx)),'Replace',false);
+    AICtemp_idx=setdiff(AICtemp_idx,AICidx_trn);
+    AICidx_val=datasample(AICtemp_idx,floor(0.15*length(AIC_idx)),'Replace',false);
+    AICtemp_idx=setdiff(AICtemp_idx,AICidx_val);
+    AICidx_test=AICtemp_idx;
+    
+    rng('shuffle')
+    nAICtemp_idx=non_AICidx;
+    nAICidx_trn=datasample(non_AICidx,floor(0.7*length(non_AICidx)),'Replace',false);
+    nAICtemp_idx=setdiff(nAICtemp_idx,nAICidx_trn);
+    nAICidx_val=datasample(nAICtemp_idx,floor(0.15*length(non_AICidx)),'Replace',false);
+    nAICtemp_idx=setdiff(nAICtemp_idx,nAICidx_val);
+    nAICidx_test=nAICtemp_idx;
+    
+    net.divideParam.testInd=[AICidx_test nAICidx_test];
+    net.divideParam.valInd=[AICidx_val nAICidx_val];
+    net.divideParam.trainInd=[AICidx_trn nAICidx_trn];
+ 
+    rng('shuffle')
+    [net,tr]=train(net,XS,WS);
+    
+    wp=net(XS);
+    md=fitlm(WS(tr.trainInd),wp(tr.trainInd));
+    R2_1=md.Rsquared.Ordinary;  
+    md=fitlm(WS(tr.testInd),wp(tr.testInd));
+    R2_2=md.Rsquared.Ordinary;  
+    WP=net(XS);
+    WP=WP(AIC_idx);
+    md=fitlm(WO,WP);
+    R2_org=md.Rsquared.Ordinary;  
+    
+    WP=net(XS);
+    md=fitlm(WS(AICidx_trn),WP(AICidx_trn));
+    R2_Exp_tr=md.Rsquared.Ordinary;  
+    md=fitlm(WS([AICidx_val ]),WP([AICidx_val ]));
+    R2_Exp_vl=md.Rsquared.Ordinary;
+    
+    md=fitlm(WS([AICidx_test ]),WP([AICidx_test ]));
+    R2_Exp_test=md.Rsquared.Ordinary;
+    
+    WP=WS(AIC_idx);
+    WP=reshape(WP,length(TNF_dose),length(t_sam));
+    ee=zeros(length(TNF_dose),length(t_sam));
+    for jj=1:length(TNF_dose)
+        u=TNF_dose(jj);
+        E=WP(jj,:);
+        pp= interp1(t_sam,E,'linear','pp');
+        R1=ode15s(@(t,x) case_det_ANN(t,x,u,pp,error_idx),t_sam,x0,options);
+        ytemp=deval(R1,t_sam);
+        ytemp=ytemp(3,:);
+        ee(jj,:)=((ytemp-Y_Exp(jj,:))./Y_Exp(jj,:)).^2;
+    end
+    temp(j,:)=[R2_1 R2_2  R2_org R2_Exp_tr R2_Exp_vl R2_Exp_test mean(mean(ee))];
+    NETT{j}=net;
+end
+save('Res_ANN_opt_84_1000.mat','temp')
+save('NETT_opt_84_1000.mat','NETT')
+
+%%
+load('Res_ANN_opt_84_1000.mat')
+load('NETT_opt_84_1000.mat')
+temp=[[1:Ntr]' temp];
+temp=[temp zeros(Ntr,1)];
+for i=1:Ntr
+    nett=NETT{i};
+    WP=nett(XS);
+    WP=WP(AIC_idx);
+    md=fitlm(WS([AIC_idx]),WP);
+   temp(i,9)=md.Rsquared.Ordinary; 
+end
+temp=[temp temp(:,5)*(0.7)+temp(:,6)*(0.15)+temp(:,7)*(0.15)];
+aa=flipud(sortrows(temp,9));
+net_idx=154;
+net_cho=NETT{net_idx};
+WP=net_cho(XS);
+WP=WP(AIC_idx);
+WP=reshape(WP,length(TNF_dose),length(t_sam));
+
+mak1={'bo','ro','ko'};
+mak2={'b-','r-','k-'};
+clr={'b','r','k'};
+E_tot_cor=0;
+E_tot=0;
+for jj=1:length(TNF_dose)
+    u=TNF_dose(jj);
+    E=WP(jj,:);
+    pp= interp1(t_sam,E,'linear','pp');
+    R1=ode15s(@(t,x) case_det_ANN(t,x,u,pp,error_idx),tt,x0,options);
+    ytemp=deval(R1,tt);
+    ytemp=ytemp(3,:);
+    ypp=deval(R1,t_sam);
+    
+
+ E_tot_cor=E_tot_cor+sum(((ypp(3,:)-Y_Exp(jj,:))).^2);
+    
+    plot(tt,ytemp,mak2{jj},'linewidth',2)
+    hold on
+    plot(t_sam,Y_Exp(jj,:),mak1{jj},'Markersize',10,'MarkerFacecolor',clr{jj})
+   R1=ode15s(@(t,x) case_det(t,x,u),tt,x0,options);
+   ypp=deval(R1,t_sam);
+
+     E_tot=E_tot+sum(((ypp(3,:)-Y_Exp(jj,:))).^2);
+end
+hold off
+
+E_tot_cor=E_tot_cor/length(t_sam)/length(TNF_dose);
+E_tot=E_tot/length(t_sam)/length(TNF_dose);
+
+xlabel('Time, hour')
+           ylabel('NF\kappaB Activity')
+           
+          % ylim([0.2 1.1])
+           ax = gca; % current axes
+           ax.FontSize = 25;
+           ax.FontWeight='bold';
+           X0=10;
+           y0=-100;
+           width=800;
+           height=600;
+ set(gcf,'units','points','position',[X0,y0,width,height])
+lgd= legend('Measurement (TNF=0.5)','Prediction (TNF=0.5)','Measurement (TNF=1)','Prediction (TNF=1)','Measurement (TNF=2)','Prediction (TNF=2)');
+lgd.NumColumns=3;
+lgd.FontSize=15;
